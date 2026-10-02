@@ -1,0 +1,33 @@
+# ---- Secrets ----
+.env
+
+# ---- Large data (never commit the 5.5 GB dataset) ----
+data/raw/*
+data/sample/*
+!data/raw/.gitkeep
+!data/sample/.gitkeep
+*.csv
+*.csv.zip
+*.parquet
+
+# ---- Generated runtime files ----
+airflow/logs/*
+!airflow/logs/.gitkeep
+spark/target/
+spark/project/target/
+spark/project/project/
+.bsp/
+.idea/
+.vscode/
+*.log
+
+# ---- Docker volume data / checkpoints ----
+volumes/
+checkpoints/
+
+# ---- Python / OS junk ----
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+Thumbs.db
