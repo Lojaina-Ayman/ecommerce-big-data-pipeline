@@ -31,3 +31,10 @@ __pycache__/
 .venv/
 .DS_Store
 Thumbs.db
+# ---- Kafka Connect spool directories ----
+data/connect/input/*
+data/connect/finished/*
+data/connect/error/*
+!data/connect/input/.gitkeep
+!data/connect/finished/.gitkeep
+!data/connect/error/.gitkeep
