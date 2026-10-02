@@ -1,0 +1,35 @@
+name: smoke-test
+
+networks:
+  demo-net:
+
+volumes:
+  demo-data:
+
+services:
+  server:
+    image: busybox:1.36
+    container_name: smoke-server
+    command: >
+      sh -c "echo 'hello from the server container' > /data/msg.txt &&
+             httpd -f -p 8000 -h /data"
+    volumes:
+      - demo-data:/data
+    networks:
+      - demo-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8000/msg.txt"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  client:
+    image: busybox:1.36
+    container_name: smoke-client
+    depends_on:
+      server:
+        condition: service_healthy
+    command: sh -c "echo 'client got:' && wget -q -O - http://server:8000/msg.txt"
+    networks:
+      - demo-net
