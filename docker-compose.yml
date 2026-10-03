@@ -8,10 +8,72 @@ volumes:
   kafka_data:
   clickhouse_data:
   clickhouse_logs:
+  postgres_data:
+  airflow_logs:
+  superset_home:
+  spark_checkpoints:
+
+# ---------- shared Airflow settings ----------
+x-airflow-common: &airflow-common
+  image: ecommerce-airflow:local
+  build:
+    context: ./airflow/docker
+    args:
+      AIRFLOW_BASE_IMAGE: ${AIRFLOW_BASE_IMAGE}
+  user: "${AIRFLOW_UID:-50000}:0"
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
+    AIRFLOW__API__SECRET_KEY: ${AIRFLOW_API_SECRET_KEY}
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    KAFKA_BOOTSTRAP: kafka:9092
+    KAFKA_CONNECT_URL: http://kafka-connect:8083
+    SPARK_MASTER_URL: spark://spark-master:7077
+    SPARK_MASTER_UI_URL: http://spark-master:8080
+    CLICKHOUSE_HOST: clickhouse
+    CLICKHOUSE_HTTP_PORT: "8123"
+    CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+    CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+    CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./airflow/config:/opt/airflow/config
+    - airflow_logs:/opt/airflow/logs
+  networks: [bigdata-net]
+
+x-airflow-depends: &airflow-depends
+  postgres:
+    condition: service_healthy
+  airflow-init:
+    condition: service_completed_successfully
+
+# ---------- shared Superset settings ----------
+x-superset-common: &superset-common
+  image: ecommerce-superset:local
+  build:
+    context: ./superset/docker
+    args:
+      SUPERSET_BASE_IMAGE: ${SUPERSET_BASE_IMAGE}
+  environment: &superset-env
+    SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+    SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+    SUPERSET_DB: ${SUPERSET_DB}
+    SUPERSET_DB_USER: ${SUPERSET_DB_USER}
+    SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD}
+  volumes:
+    - ./superset/config/superset_config.py:/app/pythonpath/superset_config.py:ro
+    - superset_home:/app/superset_home
+  networks: [bigdata-net]
 
 services:
 
-  # ---------------------------------------------------------------- KAFKA
+  # ============================================================ KAFKA (always on)
   kafka:
     image: ${KAFKA_IMAGE}
     container_name: kafka
@@ -48,8 +110,40 @@ services:
       retries: 12
       start_period: 20s
 
-  # ---------------------------------------------------------- KAFKA CONNECT
+  # ============================================================ CLICKHOUSE (always on)
+  clickhouse:
+    image: ${CLICKHOUSE_IMAGE}
+    container_name: clickhouse
+    hostname: clickhouse
+    restart: unless-stopped
+    mem_limit: 3g
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT}:8123"
+      - "${CLICKHOUSE_NATIVE_PORT}:9000"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+      - ./clickhouse/init:/docker-entrypoint-initdb.d
+    networks: [bigdata-net]
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ============================================================ INGEST profile
   kafka-connect:
+    profiles: [ingest]
     build:
       context: ./kafka/connect
       args:
@@ -89,8 +183,8 @@ services:
       - ./data/connect/error:/data/error
     networks: [bigdata-net]
 
-  # -------------------------------------------------------------- KAFKA UI
   kafka-ui:
+    profiles: [ingest]
     image: ${KAFKA_UI_IMAGE}
     container_name: kafka-ui
     hostname: kafka-ui
@@ -108,8 +202,9 @@ services:
       - "${KAFKA_UI_PORT}:8080"
     networks: [bigdata-net]
 
-  # ----------------------------------------------------------------- SPARK
+  # ============================================================ PROCESS profile
   spark-master:
+    profiles: [process]
     image: ${SPARK_IMAGE}
     container_name: spark-master
     hostname: spark-master
@@ -123,6 +218,7 @@ services:
       - "${SPARK_MASTER_PORT}:7077"
     volumes:
       - ./spark/apps:/opt/spark-apps
+      - spark_checkpoints:/opt/spark-checkpoints
     networks: [bigdata-net]
     healthcheck:
       test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8080' || exit 1"]
@@ -132,6 +228,7 @@ services:
       start_period: 10s
 
   spark-worker:
+    profiles: [process]
     image: ${SPARK_IMAGE}
     container_name: spark-worker
     hostname: spark-worker
@@ -149,35 +246,163 @@ services:
       - "${SPARK_WORKER_UI_PORT}:8081"
     volumes:
       - ./spark/apps:/opt/spark-apps
+      - spark_checkpoints:/opt/spark-checkpoints
     networks: [bigdata-net]
 
-  # ------------------------------------------------------------ CLICKHOUSE
-  clickhouse:
-    image: ${CLICKHOUSE_IMAGE}
-    container_name: clickhouse
-    hostname: clickhouse
+  # ============================================================ POSTGRES (orchestration + bi)
+  postgres:
+    profiles: [orchestration, bi]
+    image: ${POSTGRES_IMAGE}
+    container_name: postgres
+    hostname: postgres
     restart: unless-stopped
-    mem_limit: 3g
+    mem_limit: 512m
     environment:
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-    ports:
-      - "${CLICKHOUSE_HTTP_PORT}:8123"
-      - "${CLICKHOUSE_NATIVE_PORT}:9000"
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AIRFLOW_DB: ${AIRFLOW_DB}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      SUPERSET_DB: ${SUPERSET_DB}
+      SUPERSET_DB_USER: ${SUPERSET_DB_USER}
+      SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD}
     volumes:
-      - clickhouse_data:/var/lib/clickhouse
-      - clickhouse_logs:/var/log/clickhouse-server
-      - ./clickhouse/init:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     networks: [bigdata-net]
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 15s
+      retries: 12
+      start_period: 10s
+
+  # ============================================================ AIRFLOW (orchestration)
+  airflow-init:
+    <<: *airflow-common
+    profiles: [orchestration]
+    container_name: airflow-init
+    mem_limit: 1g
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *airflow-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+    command: version
+
+  airflow-apiserver:
+    <<: *airflow-common
+    profiles: [orchestration]
+    container_name: airflow-apiserver
+    hostname: airflow-apiserver
+    restart: unless-stopped
+    mem_limit: 1280m
+    command: api-server
+    depends_on: *airflow-depends
+    ports:
+      - "${AIRFLOW_WEBSERVER_PORT}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  airflow-scheduler:
+    <<: *airflow-common
+    profiles: [orchestration]
+    container_name: airflow-scheduler
+    hostname: airflow-scheduler
+    restart: unless-stopped
+    mem_limit: 1024m
+    command: scheduler
+    depends_on: *airflow-depends
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    profiles: [orchestration]
+    container_name: airflow-dag-processor
+    hostname: airflow-dag-processor
+    restart: unless-stopped
+    mem_limit: 768m
+    command: dag-processor
+    depends_on: *airflow-depends
+    healthcheck:
+      test: ["CMD", "airflow", "jobs", "check", "--job-type", "DagProcessorJob", "--local"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 40s
+
+  airflow-triggerer:
+    <<: *airflow-common
+    profiles: [orchestration]
+    container_name: airflow-triggerer
+    hostname: airflow-triggerer
+    restart: unless-stopped
+    mem_limit: 512m
+    command: triggerer
+    depends_on: *airflow-depends
+    healthcheck:
+      test: ["CMD", "airflow", "jobs", "check", "--job-type", "TriggererJob", "--local"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 40s
+
+  # ============================================================ SUPERSET (bi)
+  superset-init:
+    <<: *superset-common
+    profiles: [bi]
+    container_name: superset-init
+    mem_limit: 1g
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *superset-env
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      SUPERSET_ADMIN_EMAIL: ${AIRFLOW_ADMIN_EMAIL}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        superset db upgrade
+        superset fab create-admin --username "$$SUPERSET_ADMIN_USER" --firstname Admin --lastname User --email "$$SUPERSET_ADMIN_EMAIL" --password "$$SUPERSET_ADMIN_PASSWORD" || echo "create-admin returned non-zero (user probably exists; check output above)"
+        superset init
+
+  superset:
+    <<: *superset-common
+    profiles: [bi]
+    container_name: superset
+    hostname: superset
+    restart: unless-stopped
+    mem_limit: 1536m
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    command: ["gunicorn", "--bind", "0.0.0.0:8088", "--workers", "2", "--threads", "4", "--timeout", "120", "superset.app:create_app()"]
+    ports:
+      - "${SUPERSET_PORT}:8088"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8088/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
