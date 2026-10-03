@@ -1,0 +1,17 @@
+﻿{
+  "name": "ecommerce-csv-source",
+  "config": {
+    "tasks.max": "1",
+    "connector.class": "com.github.jcustenborder.kafka.connect.spooldir.SpoolDirCsvSourceConnector",
+    "input.path": "/data/input",
+    "finished.path": "/data/finished",
+    "error.path": "/data/error",
+    "input.file.pattern": ".*\\.csv",
+    "topic": "ecommerce_events_stream",
+    "csv.first.row.as.header": "true",
+    "schema.generation.enabled": "true",
+    "key.schema": "{\"name\":\"com.ecommerce.Key\",\"type\":\"STRUCT\",\"isOptional\":false,\"fieldSchemas\":{\"user_session\":{\"type\":\"STRING\",\"isOptional\":true}}}",
+    "value.schema": "{\"name\":\"com.ecommerce.Value\",\"type\":\"STRUCT\",\"isOptional\":false,\"fieldSchemas\":{\"event_time\":{\"type\":\"STRING\",\"isOptional\":true},\"event_type\":{\"type\":\"STRING\",\"isOptional\":true},\"product_id\":{\"type\":\"INT64\",\"isOptional\":true},\"category_id\":{\"type\":\"INT64\",\"isOptional\":true},\"category_code\":{\"type\":\"STRING\",\"isOptional\":true},\"brand\":{\"type\":\"STRING\",\"isOptional\":true},\"price\":{\"type\":\"FLOAT64\",\"isOptional\":true},\"user_id\":{\"type\":\"INT64\",\"isOptional\":true},\"user_session\":{\"type\":\"STRING\",\"isOptional\":true}}}",
+    "halt.on.error": "false"
+  }
+}
