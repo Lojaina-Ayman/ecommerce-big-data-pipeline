@@ -38,3 +38,7 @@ data/connect/error/*
 !data/connect/input/.gitkeep
 !data/connect/finished/.gitkeep
 !data/connect/error/.gitkeep
+
+spark/apps/*.jar
+!spark/apps/.gitkeep
+!tests/fixtures/*.csv
