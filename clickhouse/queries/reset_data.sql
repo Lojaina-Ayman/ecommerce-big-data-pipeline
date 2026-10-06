@@ -1,0 +1,9 @@
+﻿TRUNCATE TABLE IF EXISTS ecommerce.ecommerce_events;
+TRUNCATE TABLE IF EXISTS ecommerce.events_quarantine;
+TRUNCATE TABLE IF EXISTS ecommerce.batch_ledger;
+TRUNCATE TABLE IF EXISTS ecommerce.daily_funnel;
+TRUNCATE TABLE IF EXISTS ecommerce.hourly_activity;
+TRUNCATE TABLE IF EXISTS ecommerce.category_sales;
+TRUNCATE TABLE IF EXISTS ecommerce.brand_sales;
+TRUNCATE TABLE IF EXISTS ecommerce.daily_uniques;
+TRUNCATE TABLE IF EXISTS ecommerce.session_state;

@@ -420,23 +420,27 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      clickhouse:
+        condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      KAFKA_TOPIC: ecommerce_events_stream
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-ecommerce_events_stream}
       MODE: ${SPARK_MODE:-clean}
+      SINK: ${SPARK_SINK:-log}
       MAX_OFFSETS_PER_TRIGGER: ${SPARK_MAX_OFFSETS_PER_TRIGGER:-20000}
       TRIGGER_SECONDS: ${SPARK_TRIGGER_SECONDS:-10}
       STARTING_OFFSETS: earliest
-      SINK: clickhouse
-      CLICKHOUSE_URL: jdbc:ch://clickhouse:8123/ecommerce
-      CLICKHOUSE_USER: default_admin
-      CLICKHOUSE_PASSWORD: change_me_clickhouse
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: "8123"
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default_admin}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change_me_clickhouse}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-ecommerce}
     command: >
       /opt/spark/bin/spark-submit
       --master spark://spark-master:7077
       --deploy-mode client
       --class com.ecom.Main
-      --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.2,com.clickhouse:clickhouse-jdbc:0.6.5
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.2,com.clickhouse.spark:clickhouse-spark-runtime-4.0_2.13:0.9.0,com.clickhouse:clickhouse-jdbc:0.9.4
       --conf spark.jars.ivy=/tmp/.ivy
       --conf spark.driver.host=spark-job
       --conf spark.driver.memory=768m
@@ -448,4 +452,4 @@ services:
     volumes:
       - ./spark/apps:/opt/spark-apps:ro
       - spark_checkpoints:/opt/spark-checkpoints
-    networks: [bigdata-net]   
+    networks: [bigdata-net]

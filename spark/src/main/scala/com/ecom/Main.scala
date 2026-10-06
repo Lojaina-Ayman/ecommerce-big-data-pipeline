@@ -24,11 +24,25 @@ object Main {
   def main(args: Array[String]): Unit = {
     val cfg = Config.fromEnv()
 
-    val spark = SparkSession.builder()
-      .appName(s"ecommerce-streaming-${cfg.mode}")
+    val base = SparkSession.builder()
+      .appName(s"ecommerce-streaming-${cfg.mode}-${cfg.sink}")
       .config("spark.sql.session.timeZone", "UTC")
       .config("spark.sql.shuffle.partitions", "4")
-      .getOrCreate()
+
+    val builder =
+      if (cfg.sink == "clickhouse")
+        base
+          .config("spark.sql.catalog.clickhouse", "com.clickhouse.spark.ClickHouseCatalog")
+          .config("spark.sql.catalog.clickhouse.host", cfg.ch.host)
+          .config("spark.sql.catalog.clickhouse.protocol", "http")
+          .config("spark.sql.catalog.clickhouse.http_port", cfg.ch.httpPort)
+          .config("spark.sql.catalog.clickhouse.user", cfg.ch.user)
+          .config("spark.sql.catalog.clickhouse.password", cfg.ch.password)
+          .config("spark.sql.catalog.clickhouse.database", cfg.ch.db)
+          .config("spark.clickhouse.write.format", "json")
+      else base
+
+    val spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     spark.streams.addListener(new ProgressListener)
 
@@ -53,9 +67,11 @@ object Main {
 
   private def cleanQuery(scored: DataFrame, cfg: Config, trigger: Trigger): StreamingQuery = {
     val writer: (DataFrame, Long) => Unit = cfg.sink match {
-      case "log"        => Sinks.logSink
-      case "clickhouse" => Sinks.clickhouseSink(cfg)
-      case other        => throw new IllegalArgumentException(s"Unknown SINK '$other' (use log or clickhouse)")
+      case "log" => Sinks.logSink
+      case "clickhouse" =>
+        val sink = new ClickHouseSink(cfg.ch.db, "ecommerce_clean")
+        (df: DataFrame, id: Long) => sink.process(df, id)
+      case other => throw new IllegalArgumentException(s"Unknown SINK '$other' (use log or clickhouse)")
     }
     scored.writeStream
       .queryName("ecommerce_clean")
