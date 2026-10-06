@@ -1,0 +1,11 @@
+event_time,event_type,product_id,category_id,category_code,brand,price,user_id,user_session
+2019-10-03 10:00:01 UTC,view,5001,3001,electronics.smartphone,apple,500.00,7001,abandon-s1
+2019-10-03 10:00:02 UTC,cart,5001,3001,electronics.smartphone,apple,500.00,7001,abandon-s1
+2019-10-03 10:00:03 UTC,purchase,5001,3001,electronics.smartphone,apple,500.00,7001,abandon-s1
+2019-10-03 10:01:01 UTC,view,5002,3002,electronics.audio.headphone,sony,80.00,7002,abandon-s2
+2019-10-03 10:01:02 UTC,cart,5002,3002,electronics.audio.headphone,sony,80.00,7002,abandon-s2
+2019-10-03 10:02:01 UTC,cart,5003,3003,apparel.shoes,nike,60.00,7003,abandon-s3
+2019-10-03 10:03:01 UTC,view,5004,3004,stationery,acme,5.00,7004,abandon-s4
+2019-10-03 10:04:01 UTC,purchase,5005,3005,appliances.kitchen,bosch,100.00,7005,abandon-s5
+2019-10-03 10:05:01 UTC,cart,5006,3006,computers.notebook,lenovo,40.00,7006,abandon-s6a
+2019-10-03 18:05:01 UTC,purchase,5006,3006,computers.notebook,lenovo,40.00,7006,abandon-s6b

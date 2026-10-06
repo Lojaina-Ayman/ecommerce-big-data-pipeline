@@ -15,9 +15,11 @@ $db   = $cfg['CLICKHOUSE_DB']
 Push-Location $root
 try {
     if ($File) {
-        Get-Content $File -Raw | docker compose exec -T clickhouse clickhouse-client --user $user --password $pass --multiquery
+        Get-Content $File -Raw | docker compose exec -T clickhouse clickhouse-client `
+            --user $user --password $pass --database "$db" --multiquery --format PrettyCompact
     } else {
-        docker compose exec -T clickhouse clickhouse-client --user $user --password $pass --database $db --format PrettyCompact --query $Query
+        docker compose exec -T clickhouse clickhouse-client `
+            --user $user --password $pass --database "$db" --format PrettyCompact --query $Query
     }
 } finally {
     Pop-Location
