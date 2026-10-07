@@ -452,4 +452,6 @@ services:
     volumes:
       - ./spark/apps:/opt/spark-apps:ro
       - spark_checkpoints:/opt/spark-checkpoints
+      - ./data:/opt/airflow/data
+      - ./clickhouse/queries:/opt/airflow/sql:ro
     networks: [bigdata-net]

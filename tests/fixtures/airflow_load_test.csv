@@ -1,0 +1,7 @@
+event_time,event_type,product_id,category_id,category_code,brand,price,user_id,user_session
+2019-10-04 09:00:01 UTC,view,6001,4001,electronics.tablet,apple,300.00,8001,airflow-s1
+2019-10-04 09:00:02 UTC,cart,6001,4001,electronics.tablet,apple,300.00,8001,airflow-s1
+2019-10-04 09:00:03 UTC,purchase,6001,4001,electronics.tablet,apple,300.00,8001,airflow-s1
+2019-10-04 09:01:01 UTC,view,6002,4002,apparel.shirt,zara,25.00,8002,airflow-s2
+2019-10-04 09:01:02 UTC,cart,6002,4002,apparel.shirt,zara,25.00,8002,airflow-s2
+2019-10-04 09:02:01 UTC,view,6003,4003,kids.toys,lego,40.00,8003,airflow-s3
