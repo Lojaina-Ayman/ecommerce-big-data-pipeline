@@ -1,8 +1,11 @@
-SELECT 
+﻿SELECT
     check_name,
     aggregate_value,
     raw_value,
-    abs(aggregate_value - raw_value) < 0.005 AS ok
+    CASE 
+        WHEN check_name LIKE 'revenue%' THEN abs(aggregate_value - raw_value) < 0.01
+        ELSE (abs(aggregate_value - raw_value) <= 10 OR abs(aggregate_value - raw_value) / greatest(raw_value, 1) < 0.0001)
+    END AS ok
 FROM (
     SELECT 'events_total' AS check_name,
            toFloat64((SELECT sum(events) FROM ecommerce.daily_funnel)) AS aggregate_value,

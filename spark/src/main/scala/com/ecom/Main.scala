@@ -40,6 +40,8 @@ object Main {
           .config("spark.sql.catalog.clickhouse.password", cfg.ch.password)
           .config("spark.sql.catalog.clickhouse.database", cfg.ch.db)
           .config("spark.clickhouse.write.format", "json")
+          .config("spark.clickhouse.write.batchSize", cfg.chWriteBatchSize)
+          .config("spark.clickhouse.write.repartitionByPartition", cfg.chRepartitionByPartition)
       else base
 
     val spark = builder.getOrCreate()
@@ -55,7 +57,7 @@ object Main {
       .load()
 
     val scored  = Transformations.score(kafka)
-    val trigger = Trigger.ProcessingTime(s"${cfg.triggerSeconds} seconds")
+    val trigger = if (cfg.triggerSeconds == 0) Trigger.AvailableNow() else Trigger.ProcessingTime(s"${cfg.triggerSeconds} seconds")
 
     val query = cfg.mode match {
       case "clean"  => cleanQuery(scored, cfg, trigger)
@@ -67,11 +69,12 @@ object Main {
 
   private def cleanQuery(scored: DataFrame, cfg: Config, trigger: Trigger): StreamingQuery = {
     val writer: (DataFrame, Long) => Unit = cfg.sink match {
-      case "log" => Sinks.logSink
+      case "log"  => Sinks.logSink
+      case "noop" => Sinks.noopSink
       case "clickhouse" =>
         val sink = new ClickHouseSink(cfg.ch.db, "ecommerce_clean")
         (df: DataFrame, id: Long) => sink.process(df, id)
-      case other => throw new IllegalArgumentException(s"Unknown SINK '$other' (use log or clickhouse)")
+      case other => throw new IllegalArgumentException(s"Unknown SINK '$other' (use log, noop, or clickhouse)")
     }
     scored.writeStream
       .queryName("ecommerce_clean")

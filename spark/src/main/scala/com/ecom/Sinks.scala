@@ -34,4 +34,18 @@ object Sinks {
       scored.unpersist()
     }
   }
+
+  /** Benchmark sink: full computation, no output. Measures Spark alone. */
+  def noopSink(scored: DataFrame, batchId: Long): Unit = {
+    scored.persist()
+    try {
+      Transformations.validRows(scored)
+        .dropDuplicates(Transformations.IdentityKeys)
+        .write.format("noop").mode("append").save()
+      Transformations.quarantineRows(scored)
+        .write.format("noop").mode("append").save()
+    } finally {
+      scored.unpersist()
+    }
+  }
 }
