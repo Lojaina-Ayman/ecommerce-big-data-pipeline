@@ -42,3 +42,25 @@ Environment: Windows 11 + WSL2 (12 GB Docker limit), Docker Desktop, 1 Spark wor
 ## Airflow Data Quality Audit
 - **DAG Execution:** `data_quality` passed 100% (5/5 tasks green).
 - **Checks Verified:** Null checks, date boundaries, zero-price filter, ledger integrity, sketch aggregations.
+
+## Optimization results (Phase 11)
+
+| Metric | Phase 10 baseline | After optimization | Change |
+|---|---|---|---|
+| Full drain time (ledger started -> finished) | ~23 min (Phase 10) | ~19.5 min | **-15.2% duration** |
+| End-to-end write throughput | ~30,500 rows/s | ~35,200 rows/s | **+15.4% throughput** |
+| ClickHouse size on disk (compressed) | 1.51 GiB | 943.73 MiB | **-38.8% storage saved** |
+| Active parts (post-compaction) | 167 parts | 31 parts (1 per day) | **-81.4% parts** |
+| Workload: W6 FINAL scan latency | 1,988 ms | 19 ms | **-99.0% latency** |
+| Workload: W1 day-type scan rows read | 73,574 rows | 16,240 rows | **-77.9% I/O reduction** |
+| Workload: W2 category-brand scan rows read | 36,319,739 rows | 21,377,390 rows | **-41.1% I/O reduction** |
+| Superset distinct-count card memory | 232.4 MiB (`uniqExact`) | 5.51 MiB (`uniqCombined64`) | **-97.6% memory reduction** |
+| Superset repeated dashboard load queries | 119 queries hit ClickHouse | 0 queries (File Cache hit) | **100% offloaded** |
+| Container memory caps (suggested sum) | ~12.5 GiB | 10.75 GiB | **Right-sized per measured peaks** |
+
+**Rejected / No-Change Findings:**
+* **W4 User Journey Sorting:** Ordering primary key by `user_id` rejected because no business requirement exists for user journey drilldowns and projections double table disk size.
+* **Monthly Partitioning (O2):** Rejected because collapsing to 1 partition eliminates partition-level drop/attach lifecycle management and single-day repair pruning without query wins.
+* **Filter-Aligned Primary Key (O3):** Rejected because gaining on category/brand drilldowns regressed date-filtering queries by +150% to +540%.
+* **Binary Arrow Format (O9):** Rejected because Arrow IPC serialization yielded 4.5% lower throughput than native JSON HTTP streaming under Java 17.
+* **Checkpoint Compaction:** Audit proved Spark checkpoint footprint is 204 KiB with negligible overhead.

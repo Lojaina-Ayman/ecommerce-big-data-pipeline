@@ -1,11 +1,11 @@
-﻿CREATE DATABASE IF NOT EXISTS ecommerce;
+CREATE DATABASE IF NOT EXISTS ecommerce;
 
 -- Clean fact table: one row per valid event.
 CREATE TABLE IF NOT EXISTS ecommerce.ecommerce_events
 (
-    event_time       DateTime('UTC'),
+    event_time       DateTime('UTC') CODEC(DoubleDelta, ZSTD(1)),
     event_date       Date,
-    event_hour       DateTime('UTC'),
+    event_hour       DateTime('UTC') CODEC(DoubleDelta, ZSTD(1)),
     hour_of_day      UInt8,
     day_of_week      UInt8,                    -- ISO: 1 = Monday ... 7 = Sunday
     event_type       LowCardinality(String),   -- view | cart | purchase
@@ -17,12 +17,12 @@ CREATE TABLE IF NOT EXISTS ecommerce.ecommerce_events
     category_depth   UInt8,
     brand            LowCardinality(String),   -- 'unknown' when missing
     price            Decimal(10, 2),           -- 0 when missing (see dq_flags)
-    user_id          UInt64,
-    user_session     String,                   -- '' = unknown
+    user_id          UInt64 CODEC(ZSTD(1)),
+    user_session     String CODEC(ZSTD(3)),                   -- '' = unknown
     dq_flags         Array(String),
     kafka_partition  UInt8,
-    kafka_offset     UInt64,
-    ingested_at      DateTime('UTC')
+    kafka_offset     UInt64 CODEC(Delta, ZSTD(1)),
+    ingested_at      DateTime('UTC') CODEC(DoubleDelta, ZSTD(1))
 )
 ENGINE = ReplacingMergeTree(ingested_at)
 PARTITION BY toYYYYMMDD(event_date)
@@ -58,3 +58,13 @@ CREATE TABLE IF NOT EXISTS ecommerce.batch_ledger
 )
 ENGINE = MergeTree
 ORDER BY (query_name, signature);
+
+CREATE TABLE IF NOT EXISTS ecommerce.ecommerce_events_buffer AS ecommerce.ecommerce_events
+ENGINE = Buffer(
+    ecommerce,           -- target database
+    ecommerce_events,    -- target table
+    16,                  -- num_layers
+    10, 60,              -- min_time, max_time (seconds)
+    10000, 1000000,      -- min_rows, max_rows
+    10000000, 100000000  -- min_bytes, max_bytes
+);

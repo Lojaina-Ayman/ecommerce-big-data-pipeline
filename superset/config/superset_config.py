@@ -10,3 +10,9 @@ SQLALCHEMY_DATABASE_URI = (
 
 ROW_LIMIT = 50000
 SUPERSET_WEBSERVER_TIMEOUT = 120
+# Chart-data cache shared by gunicorn workers, persisted in superset_home volume.
+DATA_CACHE_CONFIG = {
+    "CACHE_TYPE": "FileSystemCache",
+    "CACHE_DIR": "/app/superset_home/cache/data",
+    "CACHE_DEFAULT_TIMEOUT": 600,
+}

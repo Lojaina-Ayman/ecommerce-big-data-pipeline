@@ -39,7 +39,7 @@ object Main {
           .config("spark.sql.catalog.clickhouse.user", cfg.ch.user)
           .config("spark.sql.catalog.clickhouse.password", cfg.ch.password)
           .config("spark.sql.catalog.clickhouse.database", cfg.ch.db)
-          .config("spark.clickhouse.write.format", "json")
+          .config("spark.clickhouse.write.format", sys.env.getOrElse("CH_WRITE_FORMAT", "json"))
           .config("spark.clickhouse.write.batchSize", cfg.chWriteBatchSize)
           .config("spark.clickhouse.write.repartitionByPartition", cfg.chRepartitionByPartition)
       else base
@@ -48,13 +48,15 @@ object Main {
     spark.sparkContext.setLogLevel("WARN")
     spark.streams.addListener(new ProgressListener)
 
-    val kafka = spark.readStream.format("kafka")
+        val baseReader = spark.readStream.format("kafka")
       .option("kafka.bootstrap.servers", cfg.bootstrap)
       .option("subscribe", cfg.topic)
       .option("startingOffsets", cfg.startingOffsets)
       .option("maxOffsetsPerTrigger", cfg.maxOffsetsPerTrigger)
       .option("failOnDataLoss", "true")
-      .load()
+    val reader = sys.env.get("KAFKA_MIN_PARTITIONS").map(_.trim).filter(_.nonEmpty)
+      .fold(baseReader)(v => baseReader.option("minPartitions", v))
+    val kafka = reader.load()
 
     val scored  = Transformations.score(kafka)
     val trigger = if (cfg.triggerSeconds == 0) Trigger.AvailableNow() else Trigger.ProcessingTime(s"${cfg.triggerSeconds} seconds")

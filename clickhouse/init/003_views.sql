@@ -26,8 +26,7 @@ SELECT
     sumIf(events, event_type = 'view')     AS views,
     sumIf(events, event_type = 'cart')     AS carts,
     sumIf(events, event_type = 'purchase') AS purchases,
-    sum(events)                            AS total_events,
-    sumIf(revenue, event_type = 'purchase') AS purchase_revenue
+    sum(events)                            AS total_events
 FROM ecommerce.hourly_activity
 GROUP BY event_date, hour_of_day, day_of_week;
 
@@ -88,7 +87,7 @@ FROM
      FROM ecommerce.daily_funnel) AS f
 CROSS JOIN (SELECT uniqExactMerge(users) AS unique_users, uniqExactMerge(sessions) AS unique_sessions
             FROM ecommerce.daily_uniques) AS u
-CROSS JOIN (SELECT uniqExactMerge(buyers) AS buyers FROM ecommerce.daily_buyers) AS b
+CROSS JOIN (SELECT uniqExactMerge(users) AS buyers FROM ecommerce.daily_uniques) AS b
 CROSS JOIN (SELECT sum(events) AS session_events FROM ecommerce.session_state) AS s
 CROSS JOIN (SELECT countIf(c > 0) AS cart_sessions, countIf(c > 0 AND p = 0) AS abandoned_sessions
             FROM (SELECT user_session, sum(carts) AS c, sum(purchases) AS p
