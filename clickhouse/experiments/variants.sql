@@ -12,6 +12,7 @@ PARTITION BY toYYYYMMDD(event_date)
 PRIMARY KEY (event_type, primary_category, brand, event_date)
 ORDER BY (event_type, primary_category, brand, event_date, product_id, user_id, event_time, user_session, category_id);
 
+
 -- D: baseline layout + codecs on the heavy columns
 CREATE TABLE IF NOT EXISTS ecommerce.ev_d
 (
