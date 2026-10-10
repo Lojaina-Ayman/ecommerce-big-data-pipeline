@@ -1,4 +1,4 @@
-TRUNCATE TABLE ecommerce.daily_funnel;
+﻿TRUNCATE TABLE ecommerce.daily_funnel;
 INSERT INTO ecommerce.daily_funnel
 SELECT event_date, event_type, primary_category, count(), sumIf(price, event_type = 'purchase')
 FROM ecommerce.ecommerce_events FINAL
@@ -6,7 +6,7 @@ GROUP BY event_date, event_type, primary_category;
 
 TRUNCATE TABLE ecommerce.hourly_activity;
 INSERT INTO ecommerce.hourly_activity
-SELECT event_date, hour_of_day, day_of_week, event_type, count(), sumIf(price, event_type = 'purchase')
+SELECT event_date, hour_of_day, day_of_week, event_type, count()
 FROM ecommerce.ecommerce_events FINAL
 GROUP BY event_date, hour_of_day, day_of_week, event_type;
 
@@ -31,8 +31,7 @@ FROM ecommerce.ecommerce_events FINAL
 GROUP BY event_date;
 
 TRUNCATE TABLE ecommerce.daily_buyers;
-INSERT INTO ecommerce.daily_buyers
-SELECT event_date, uniqExactState(user_id)
+INSERT INTO ecommerce.daily_buyers (event_date, unique_buyers) SELECT event_date, uniqCombined64State(user_id)
 FROM ecommerce.ecommerce_events FINAL
 WHERE event_type = 'purchase'
 GROUP BY event_date;
@@ -45,3 +44,5 @@ SELECT user_session, max(user_id), min(event_time), max(event_time), count(),
 FROM ecommerce.ecommerce_events FINAL
 WHERE user_session != ''
 GROUP BY user_session;
+
+
